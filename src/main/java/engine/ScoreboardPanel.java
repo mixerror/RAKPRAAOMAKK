@@ -35,7 +35,10 @@ public class ScoreboardPanel extends JPanel {
 
         addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
-                if (backButton.contains(e.getPoint()) && onBack != null) onBack.run();
+                if (backButton.contains(e.getPoint()) && onBack != null) {
+                    SoundManager.click();
+                    onBack.run();
+                }
             }
         });
         addMouseMotionListener(new MouseAdapter() {

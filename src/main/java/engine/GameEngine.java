@@ -43,6 +43,7 @@ public class GameEngine extends JPanel implements Runnable {
 
     private boolean gameStarted;
     private boolean showingGameOver;
+    private volatile boolean paused;
 
     // Game over screen buttons
     private Rectangle playAgainButton;
@@ -134,6 +135,13 @@ public class GameEngine extends JPanel implements Runnable {
 
         if (!running) return;
 
+        if (keyCode == KeyEvent.VK_ESCAPE) {
+            togglePause();
+            return;
+        }
+
+        if (paused) return;
+
         switch (keyCode) {
             case KeyEvent.VK_UP:
             case KeyEvent.VK_W:
@@ -162,6 +170,7 @@ public class GameEngine extends JPanel implements Runnable {
         gameStarted = true;
         running = true;
         showingGameOver = false;
+        paused = false;
         gameState.reset();
         hazards.clear();
         player = new Player(2, 2, board);
@@ -175,6 +184,14 @@ public class GameEngine extends JPanel implements Runnable {
         new Thread(this).start();
     }
 
+    private void togglePause() {
+        if (!gameStarted || showingGameOver || gameState.isGameOver()) return;
+        paused = !paused;
+        beatSound.setMuted(paused);
+        if (!paused) lastBeatTime = System.currentTimeMillis();
+        repaint();
+    }
+
     @Override
     public void run() {
         long frameTime = 1_000_000_000L / FPS;
@@ -185,7 +202,7 @@ public class GameEngine extends JPanel implements Runnable {
             long delta = now - lastTime;
 
             if (delta >= frameTime) {
-                update();
+                if (!paused) update();
                 repaint();
                 lastTime = now;
             }
@@ -236,10 +253,12 @@ public class GameEngine extends JPanel implements Runnable {
                 // Check collision
                 if (h.checkHit(player.getGridRow(), player.getGridCol())) {
                     gameState.loseLife();
+                    beatSound.playHurtSound();
 
                     if (gameState.isGameOver()) {
                         running = false;
                         showingGameOver = true;
+                        beatSound.playGameOverSound();
                         beatSound.stop();
                         // Trigger name dialog + score save via callback
                         if (onGameOverCallback != null) {
@@ -359,6 +378,8 @@ public class GameEngine extends JPanel implements Runnable {
 
         // Draw HUD
         drawHUD(g2d);
+
+        if (paused) drawPauseOverlay(g2d);
 
         if (!running && gameState.isGameOver()) {
             drawGameOver(g2d);
@@ -480,6 +501,29 @@ public class GameEngine extends JPanel implements Runnable {
         g.drawString(label,
                 btn.x + (btn.width - fm.stringWidth(label)) / 2,
                 btn.y + (btn.height + fm.getAscent()) / 2 - 5);
+    }
+
+    private void drawPauseOverlay(Graphics2D g) {
+        g.setColor(new Color(5, 5, 16, 210));
+        g.fillRect(0, 0, WIDTH, HEIGHT);
+
+        g.setFont(new Font("Monospaced", Font.BOLD, 64));
+        g.setColor(new Color(0, 255, 204));
+        String title = "PAUSED";
+        FontMetrics fm = g.getFontMetrics();
+        g.drawString(title, (WIDTH - fm.stringWidth(title)) / 2, HEIGHT / 2 - 20);
+
+        g.setFont(new Font("Monospaced", Font.PLAIN, 18));
+        g.setColor(new Color(129, 140, 248));
+        String resume = "PRESS ESC TO RESUME";
+        fm = g.getFontMetrics();
+        g.drawString(resume, (WIDTH - fm.stringWidth(resume)) / 2, HEIGHT / 2 + 35);
+
+        g.setFont(new Font("Monospaced", Font.PLAIN, 13));
+        g.setColor(new Color(255, 255, 255, 70));
+        String hint = "WASD / ARROWS TO MOVE  ·  M TO MUTE";
+        fm = g.getFontMetrics();
+        g.drawString(hint, (WIDTH - fm.stringWidth(hint)) / 2, HEIGHT / 2 + 72);
     }
 
     public int getWidth() { return WIDTH; }

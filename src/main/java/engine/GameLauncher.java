@@ -169,6 +169,7 @@ public class GameLauncher extends JFrame {
         final String[] result = {"PLAYER"};
 
         Runnable submit = () -> {
+            SoundManager.click();
             String t = nameField.getText().trim();
             result[0] = t.isEmpty() ? "PLAYER" : t;
             dialog.dispose();

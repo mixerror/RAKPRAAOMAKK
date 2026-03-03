@@ -87,6 +87,107 @@ public class BeatSoundEngine {
     public boolean isMuted()        { return muted; }
     public void shutdown()          { stop(); }
 
+    // Sound Effects
+
+    /**
+     * HURT - sharp downward pitch-sweep stab (600 to 80 Hz) with distortion.
+     * Fires on its own daemon thread so it never blocks the music stream.
+     */
+    public void playHurtSound() {
+        if (muted) return;
+        Thread t = new Thread(() -> {
+            int    n   = (int)(SAMPLE_RATE * 0.22);
+            byte[] buf = new byte[n * 2];
+            double ph  = 0;
+            for (int i = 0; i < n; i++) {
+                double progress = (double) i / n;
+                double freq = 600.0 * Math.pow(80.0 / 600.0, progress);
+                ph += 2 * Math.PI * freq / SAMPLE_RATE;
+                double env   = Math.exp(-progress * 12.0);
+                double wave  = Math.signum(Math.sin(ph)) * 0.6 + Math.sin(ph) * 0.4;
+                double noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 6);
+                double s     = (wave * 0.75 + noise * 0.25) * env * 0.65;
+                int pcm = Math.max(-32768, Math.min(32767, (int)(s * 32767)));
+                buf[i * 2]     = (byte)(pcm & 0xFF);
+                buf[i * 2 + 1] = (byte)((pcm >> 8) & 0xFF);
+            }
+            playMonoPcm(buf);
+        }, "HurtSound");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * GAME OVER - deep descending boom (220 to 30 Hz) with harmonic overtones.
+     */
+    public void playGameOverSound() {
+        if (muted) return;
+        Thread t = new Thread(() -> {
+            int    n   = (int)(SAMPLE_RATE * 0.85);
+            byte[] buf = new byte[n * 2];
+            double ph  = 0;
+            for (int i = 0; i < n; i++) {
+                double progress = (double) i / n;
+                double freq = 220.0 * Math.pow(0.25, progress * 1.5);
+                ph += 2 * Math.PI * freq / SAMPLE_RATE;
+                double env  = Math.exp(-progress * 4.5);
+                double wave = Math.sin(ph) * 0.7
+                        + Math.sin(ph * 2) * 0.2
+                        + Math.sin(ph * 3) * 0.1;
+                double s    = wave * env * 0.55;
+                int pcm = Math.max(-32768, Math.min(32767, (int)(s * 32767)));
+                buf[i * 2]     = (byte)(pcm & 0xFF);
+                buf[i * 2 + 1] = (byte)((pcm >> 8) & 0xFF);
+            }
+            playMonoPcm(buf);
+        }, "GameOverSound");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * CLICK - short bright tick for UI button presses.
+     */
+    public void playClickSound() {
+        if (muted) return;
+        Thread t = new Thread(() -> {
+            int    n   = (int)(SAMPLE_RATE * 0.055);
+            byte[] buf = new byte[n * 2];
+            double ph  = 0;
+            for (int i = 0; i < n; i++) {
+                double progress = (double) i / n;
+                double env  = Math.exp(-progress * 65.0);
+                ph += 2 * Math.PI * 1100.0 / SAMPLE_RATE;
+                double tone  = Math.sin(ph) * 0.55 + Math.sin(ph * 2.4) * 0.25;
+                double noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 18);
+                double s     = (tone * 0.7 + noise * 0.3) * env * 0.50;
+                int pcm = Math.max(-32768, Math.min(32767, (int)(s * 32767)));
+                buf[i * 2]     = (byte)(pcm & 0xFF);
+                buf[i * 2 + 1] = (byte)((pcm >> 8) & 0xFF);
+            }
+            playMonoPcm(buf);
+        }, "ClickSound");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void playMonoPcm(byte[] buf) {
+        try {
+            AudioFormat fmt = new AudioFormat(
+                    AudioFormat.Encoding.PCM_SIGNED,
+                    SAMPLE_RATE, 16, 1, 2, SAMPLE_RATE, false);
+            DataLine.Info info = new DataLine.Info(SourceDataLine.class, fmt);
+            if (!AudioSystem.isLineSupported(info)) return;
+            SourceDataLine line = (SourceDataLine) AudioSystem.getLine(info);
+            line.open(fmt, buf.length * 2);
+            line.start();
+            line.write(buf, 0, buf.length);
+            line.drain();
+            line.close();
+        } catch (LineUnavailableException ignored) {}
+    }
+
+
     // ── Main streaming loop ───────────────────────────────────────────────────
 
     private void stream() {
