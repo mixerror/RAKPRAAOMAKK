@@ -68,3 +68,6 @@ bin/
 ### Mac OS ###
 .DS_Store
 >>>>>>> adc9318 (demo (first commit))
+
+### score ###
+gridbeat_scores.txt
