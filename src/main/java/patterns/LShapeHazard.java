@@ -9,13 +9,40 @@ import java.util.Random;
  * CONCRETE CLASS: LShapeHazard
  * Extends Hazard - targets an L-shaped pattern from a corner
  * INHERITANCE: LShapeHazard → Hazard
+ *
+ * <p>Combines a vertical arm and a horizontal arm meeting at one of the four
+ * corners of the grid. Each arm has length {@code gridSize/2 + 1}, and the
+ * shared corner tile is not duplicated. The corner is chosen randomly at
+ * construction time, keeping the pattern unpredictable across sessions.</p>
+ *
+ * @author Project Team
+ * @version 1.0
+ * @see Hazard
  */
 public class LShapeHazard extends Hazard {
     
+    /**
+     * Constructs an {@code LShapeHazard} anchored at a randomly chosen corner.
+     *
+     * @param board     the game board
+     * @param countdown beats of warning before the L-shape fires; must be &gt;= 0
+     */
     public LShapeHazard(Board board, int countdown) {
         super(board, createLShapeTiles(board.getGridSize()), countdown);
     }
     
+    /**
+     * Builds the tile list for an L-shape anchored at a random corner.
+     *
+     * <p>Picks one of the four corners at random (0 = top-left, 1 = top-right,
+     * 2 = bottom-left, 3 = bottom-right), then constructs a vertical arm
+     * (moving away from the corner edge) and a horizontal arm (extending from
+     * the end of the vertical arm). The corner tile is included in the vertical
+     * arm, so the horizontal arm starts at index 1 to avoid duplication.</p>
+     *
+     * @param gridSize number of rows/columns in the square grid
+     * @return list of {@code {row, col}} arrays forming the L-shape
+     */
     private static List<int[]> createLShapeTiles(int gridSize) {
         List<int[]> tiles = new ArrayList<>();
         Random rand = new Random();

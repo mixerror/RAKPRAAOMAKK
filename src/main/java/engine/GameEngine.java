@@ -21,43 +21,111 @@ import java.util.Random;
  * POLYMORPHISM DEMO:
  * - List<Hazard> stores RowHazard, ColumnHazard, SpotHazard, CrossHazard
  * - Calls update() on all → Java resolves to correct subclass at runtime
+ *
+ * <p>Extends {@link JPanel} and implements {@link Runnable} to drive a
+ * fixed-timestep loop on a background thread targeting {@value #FPS} FPS.
+ * Coordinates the {@link Board}, {@link Player}, active {@link Hazard} patterns,
+ * {@link GameState}, and {@link BeatSoundEngine}.</p>
+ *
+ * <p>Navigation callbacks are wired by the owner ({@link GameLauncher}) via
+ * {@link #setOnGameOver(GameOverCallback)} and {@link #setOnMainMenu(Runnable)}.</p>
+ *
+ * @author Project Team
+ * @version 1.0
+ * @see GameState
+ * @see BeatSoundEngine
  */
 public class GameEngine extends JPanel implements Runnable {
 
+    /** Preferred panel width in pixels. */
     private static final int WIDTH = 800;
+
+    /** Preferred panel height in pixels. */
     private static final int HEIGHT = 700;
+
+    /** Target frame rate for the game loop. */
     private static final int FPS = 60;
 
+    /** The game grid that hazard patterns operate on. */
     private Board board;
+
+    /** The player-controlled avatar. */
     private Player player;
+
+    /** Tracks score, combo, lives, and level. */
     private GameState gameState;
+
+    /** All currently active hazard patterns. Polymorphically updated each frame. */
     private List<Hazard> hazards;
+
+    /** Random number generator used for hazard pattern selection and placement. */
     private Random random;
 
+    /** {@code true} while the game loop thread is running. */
     private boolean running;
+
+    /** Timestamp (ms) of the last beat event, used to compute beat timing. */
     private long lastBeatTime;
+
+    /** Frame counter used for beat interpolation (currently unused). */
     private int beatTimer;
+
+    /** Milliseconds between beats, derived from the current BPM. */
     private int beatInterval;
 
+    /** Procedural background music and sound-effect engine. */
     private BeatSoundEngine beatSound;
 
+    /** {@code true} once the player has started the first game session. */
     private boolean gameStarted;
+
+    /** {@code true} while the game-over overlay is being displayed. */
     private boolean showingGameOver;
+
+    /** When {@code true} the game loop skips {@link #update()} but still repaints. */
     private volatile boolean paused;
 
     // Game over screen buttons
+    /** Bounding rectangle of the "Play Again" button on the game-over screen. */
     private Rectangle playAgainButton;
+
+    /** Bounding rectangle of the "Main Menu" button on the game-over screen. */
     private Rectangle mainMenuButton;
+
+    /** {@code true} when the mouse is hovering over the "Play Again" button. */
     private boolean playAgainHovered;
+
+    /** {@code true} when the mouse is hovering over the "Main Menu" button. */
     private boolean mainMenuHovered;
 
+    /** Callback invoked (on EDT) when the player loses all lives. */
     private GameOverCallback onGameOverCallback;
+
+    /** Callback invoked when the player navigates back to the main menu. */
     private Runnable onMainMenuCallback;
 
+    /**
+     * Functional interface for game-over event notifications.
+     * Receives the final score and highest level reached.
+     */
     public interface GameOverCallback {
+        /**
+         * Called after a short delay once the game-over state is entered.
+         *
+         * @param score final accumulated score
+         * @param level highest difficulty level reached
+         */
         void onGameOver(int score, int level);
     }
 
+    /**
+     * Constructs and fully initialises a new {@code GameEngine}.
+     *
+     * <p>Creates the {@link Board}, {@link Player}, {@link GameState}, and
+     * {@link BeatSoundEngine}; positions the game-over overlay buttons; and
+     * registers key and mouse listeners. Does <em>not</em> start the game loop
+     * — call {@link #startGame()} for that.</p>
+     */
     public GameEngine() {
         setPreferredSize(new Dimension(WIDTH, HEIGHT));
         setBackground(new Color(5, 5, 16));
@@ -120,6 +188,15 @@ public class GameEngine extends JPanel implements Runnable {
         });
     }
 
+    /**
+     * Handles all keyboard input for the game.
+     *
+     * <p>Before a game starts: Space or Enter starts the game.
+     * During play: arrow keys and WASD move the player; Escape toggles pause;
+     * M toggles audio mute. All inputs except Escape are ignored while paused.</p>
+     *
+     * @param keyCode the {@link KeyEvent} key code of the pressed key
+     */
     private void handleKeyPress(int keyCode) {
         if (!gameStarted) {
             if (keyCode == KeyEvent.VK_SPACE || keyCode == KeyEvent.VK_ENTER) {
@@ -166,6 +243,13 @@ public class GameEngine extends JPanel implements Runnable {
         }
     }
 
+    /**
+     * Resets all game state and starts a new game session.
+     *
+     * <p>Clears existing hazards, repositions the player at (2, 2), resets
+     * {@link GameState}, starts the {@link BeatSoundEngine}, and spawns the
+     * game-loop thread. Safe to call multiple times (e.g. "Play Again").</p>
+     */
     public void startGame() {
         gameStarted = true;
         running = true;
@@ -184,6 +268,13 @@ public class GameEngine extends JPanel implements Runnable {
         new Thread(this).start();
     }
 
+    /**
+     * Toggles the pause state. When pausing, the music is muted and the beat
+     * timer is suspended; when resuming, the beat timer reference is reset to
+     * the current time to prevent a beat from firing immediately.
+     *
+     * <p>Has no effect if no game is in progress or the game-over screen is showing.</p>
+     */
     private void togglePause() {
         if (!gameStarted || showingGameOver || gameState.isGameOver()) return;
         paused = !paused;
@@ -192,6 +283,13 @@ public class GameEngine extends JPanel implements Runnable {
         repaint();
     }
 
+    /**
+     * Fixed-timestep game loop body, executed on the game-loop thread.
+     *
+     * <p>Targets {@value #FPS} frames per second using nanosecond timing.
+     * Calls {@link #update()} (unless paused) and {@link #repaint()} each frame.
+     * Sleeps 1 ms between checks to avoid busy-waiting.</p>
+     */
     @Override
     public void run() {
         long frameTime = 1_000_000_000L / FPS;
@@ -215,6 +313,13 @@ public class GameEngine extends JPanel implements Runnable {
         }
     }
 
+    /**
+     * Advances the game state by one frame.
+     *
+     * <p>Checks whether a beat interval has elapsed and fires {@link #onBeat()} if so.
+     * Updates the player animation, resets all board cells, then polymorphically
+     * updates all active hazards and removes finished ones.</p>
+     */
     private void update() {
         // Beat timing
         long currentTime = System.currentTimeMillis();
@@ -239,6 +344,14 @@ public class GameEngine extends JPanel implements Runnable {
         hazards.removeIf(Hazard::isFinished);
     }
 
+    /**
+     * Processes a single beat event.
+     *
+     * <p>Increments the survived-beat counter in {@link GameState}, checks for
+     * player collision with each active hazard, awards score for successful dodges,
+     * triggers the game-over sequence if lives reach zero, and spawns new hazard
+     * patterns. Also updates the beat interval via {@link #updateBeatInterval()}.</p>
+     */
     private void onBeat() {
         gameState.surviveBeat();
 
@@ -302,6 +415,14 @@ public class GameEngine extends JPanel implements Runnable {
         updateBeatInterval();
     }
 
+    /**
+     * Selects a random hazard pattern based on weighted probabilities and adds
+     * it to the active hazard list.
+     *
+     * <p>Countdown length is reduced to 1 beat at high BPM (&gt;140) to increase
+     * difficulty; otherwise 2 beats are given as warning. CheckerHazard always
+     * receives one additional beat of warning.</p>
+     */
     private void spawnRandomPattern() {
         double chance = random.nextDouble();
         int gridSize = board.getGridSize();
@@ -339,6 +460,10 @@ public class GameEngine extends JPanel implements Runnable {
         }
     }
 
+    /**
+     * Recalculates the beat interval in milliseconds from the current BPM and
+     * notifies the {@link BeatSoundEngine} of the new tempo and level.
+     */
     private void updateBeatInterval() {
         int bpm   = gameState.getBPM();
         int level = gameState.getLevel();
@@ -349,18 +474,41 @@ public class GameEngine extends JPanel implements Runnable {
         }
     }
 
+    /**
+     * Applies a visual theme to the game board by delegating to {@link Board#setTheme}.
+     *
+     * @param style the {@link SettingsPanel.BoardStyle} to apply; must not be {@code null}
+     */
     public void applyTheme(SettingsPanel.BoardStyle style) {
         board.setTheme(style);
     }
 
+    /**
+     * Registers a callback to be invoked on the EDT when the player loses all lives.
+     *
+     * @param callback receives the final score and level; pass {@code null} to clear
+     */
     public void setOnGameOver(GameOverCallback callback) {
         this.onGameOverCallback = callback;
     }
 
+    /**
+     * Registers a callback to be invoked on the EDT when the player navigates
+     * back to the main menu via the game-over screen button.
+     *
+     * @param callback the Runnable to execute; pass {@code null} to clear
+     */
     public void setOnMainMenu(Runnable callback) {
         this.onMainMenuCallback = callback;
     }
 
+    /**
+     * Paints the panel. Dispatches to one of the overlay drawing methods depending
+     * on the current game state: start screen, active gameplay (with optional
+     * pause overlay), or game-over overlay.
+     *
+     * @param g the Swing {@link Graphics} context provided by the repaint cycle
+     */
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -386,6 +534,11 @@ public class GameEngine extends JPanel implements Runnable {
         }
     }
 
+    /**
+     * Draws the pre-game start screen showing the title, tagline, and controls hint.
+     *
+     * @param g the {@link Graphics2D} context
+     */
     private void drawStartScreen(Graphics2D g) {
         g.setFont(new Font("Monospaced", Font.BOLD, 48));
         g.setColor(new Color(0, 255, 204));
@@ -412,6 +565,12 @@ public class GameEngine extends JPanel implements Runnable {
         g.drawString(controls, (WIDTH - fm.stringWidth(controls)) / 2, HEIGHT / 2 + 100);
     }
 
+    /**
+     * Draws the heads-up display: score, combo multiplier, life indicator dots,
+     * current level, BPM, and mute status.
+     *
+     * @param g the {@link Graphics2D} context
+     */
     private void drawHUD(Graphics2D g) {
         g.setFont(new Font("Monospaced", Font.BOLD, 16));
         g.setColor(new Color(251, 191, 36));
@@ -458,6 +617,12 @@ public class GameEngine extends JPanel implements Runnable {
 */
     }
 
+    /**
+     * Draws the game-over overlay with the final score, level reached, and the
+     * "Play Again" and "Main Menu" action buttons.
+     *
+     * @param g the {@link Graphics2D} context
+     */
     private void drawGameOver(Graphics2D g) {
         g.setColor(new Color(5, 5, 16, 230));
         g.fillRect(0, 0, WIDTH, HEIGHT);
@@ -486,6 +651,14 @@ public class GameEngine extends JPanel implements Runnable {
         drawGameOverButton(g, mainMenuButton, "MAIN MENU", mainMenuHovered);
     }
 
+    /**
+     * Draws a single rounded-rectangle button on the game-over overlay.
+     *
+     * @param g       the {@link Graphics2D} context
+     * @param btn     bounding rectangle of the button
+     * @param label   text to display centred in the button
+     * @param hovered {@code true} if the mouse is currently over this button
+     */
     private void drawGameOverButton(Graphics2D g, Rectangle btn, String label, boolean hovered) {
         if (hovered) {
             g.setColor(new Color(0, 255, 204, 40));
@@ -503,6 +676,11 @@ public class GameEngine extends JPanel implements Runnable {
                 btn.y + (btn.height + fm.getAscent()) / 2 - 5);
     }
 
+    /**
+     * Draws a semi-transparent pause overlay with a "PAUSED" title and resume hint.
+     *
+     * @param g the {@link Graphics2D} context
+     */
     private void drawPauseOverlay(Graphics2D g) {
         g.setColor(new Color(5, 5, 16, 210));
         g.fillRect(0, 0, WIDTH, HEIGHT);
@@ -526,6 +704,17 @@ public class GameEngine extends JPanel implements Runnable {
         g.drawString(hint, (WIDTH - fm.stringWidth(hint)) / 2, HEIGHT / 2 + 72);
     }
 
+    /**
+     * Returns the preferred panel width.
+     *
+     * @return {@value #WIDTH} pixels
+     */
     public int getWidth() { return WIDTH; }
+
+    /**
+     * Returns the preferred panel height.
+     *
+     * @return {@value #HEIGHT} pixels
+     */
     public int getHeight() { return HEIGHT; }
 }

@@ -8,17 +8,41 @@ import java.awt.*;
  * CLASS: GameLauncher
  * Main entry point - manages menu screens and game flow.
  * Shows a styled name-entry dialog on game over before saving the score.
+ *
+ * <p>Extends {@link JFrame} and uses a {@link CardLayout} to host four named screens:
+ * {@code MENU}, {@code GAME}, {@code SCOREBOARD}, and {@code SETTINGS}. Navigation between
+ * screens is wired by registering {@link Runnable} callbacks on each child panel.</p>
+ *
+ * @author Project Team
+ * @version 1.0
+ * @see GameEngine
+ * @see MainMenu
  */
 public class GameLauncher extends JFrame {
 
+    /** Layout manager that switches between the four application screens. */
     private CardLayout cardLayout;
+
+    /** Root container that holds all screen panels under {@link #cardLayout}. */
     private JPanel cardPanel;
 
+    /** The animated main menu screen. */
     private MainMenu       mainMenu;
+
+    /** The gameplay panel and game-loop controller. */
     private GameEngine     gameEngine;
+
+    /** The high-score display panel. */
     private ScoreboardPanel scoreboardPanel;
+
+    /** The board-theme selection settings panel. */
     private SettingsPanel  settingsPanel;
 
+    /**
+     * Constructs the application window: creates all screen panels, wires
+     * navigation callbacks between them, adds them to the card layout, packs
+     * the frame, centres it on screen, and shows the main menu.
+     */
     public GameLauncher() {
         setTitle("GRID BEAT");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -50,6 +74,10 @@ public class GameLauncher extends JFrame {
 
     // ── Setup ────────────────────────────────────────────────────────────────
 
+    /**
+     * Wires the main menu button callbacks: start game, show scoreboard,
+     * show settings, and quit.
+     */
     private void setupMainMenu() {
         mainMenu.setOnStartGame(() -> {
             gameEngine.applyTheme(settingsPanel.getSelectedStyle());
@@ -65,6 +93,11 @@ public class GameLauncher extends JFrame {
         mainMenu.setOnQuit(() -> System.exit(0));
     }
 
+    /**
+     * Wires the game engine callbacks: shows the name-entry dialog and saves
+     * the score on game over; returns to the main menu when the player clicks
+     * "Main Menu" on the game-over screen.
+     */
     private void setupGameEngine() {
         // Called by GameEngine when the run ends — ask for name, then save
         gameEngine.setOnGameOver((score, level) -> {
@@ -76,10 +109,16 @@ public class GameLauncher extends JFrame {
         gameEngine.setOnMainMenu(this::showMainMenu);
     }
 
+    /**
+     * Wires the scoreboard panel's back button to return to the main menu.
+     */
     private void setupScoreboard() {
         scoreboardPanel.setOnBack(this::showMainMenu);
     }
 
+    /**
+     * Wires the settings panel's back button to return to the main menu.
+     */
     private void setupSettings() {
         settingsPanel.setOnBack(this::showMainMenu);
     }
@@ -89,6 +128,14 @@ public class GameLauncher extends JFrame {
     /**
      * Shows a dark, themed dialog asking the player for their name.
      * Returns the entered name, or "PLAYER" if left blank / cancelled.
+     *
+     * <p>The dialog is modal and blocks until the player confirms. The name
+     * is trimmed, stripped of commas (CSV safety), truncated to 16 characters,
+     * and uppercased before being returned.</p>
+     *
+     * @param score the final score to display in the dialog
+     * @param level the highest level reached to display in the dialog
+     * @return the player's chosen display name; never {@code null} or empty
      */
     private String askPlayerName(int score, int level) {
         // Build a custom styled dialog
@@ -200,6 +247,10 @@ public class GameLauncher extends JFrame {
 
     // ── Navigation ───────────────────────────────────────────────────────────
 
+    /**
+     * Switches the card layout to the main menu screen and requests focus
+     * so keyboard events are routed to the menu panel.
+     */
     private void showMainMenu() {
         cardLayout.show(cardPanel, "MENU");
         mainMenu.requestFocus();
@@ -207,6 +258,12 @@ public class GameLauncher extends JFrame {
 
     // ── Entry point ──────────────────────────────────────────────────────────
 
+    /**
+     * Application entry point. Bootstraps the Swing UI safely on the
+     * Event Dispatch Thread.
+     *
+     * @param args command-line arguments (unused)
+     */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             GameLauncher launcher = new GameLauncher();

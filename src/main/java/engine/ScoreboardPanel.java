@@ -13,18 +13,44 @@ import java.util.List;
  * CLASS: ScoreboardPanel
  * Displays top 10 high scores stored locally in gridbeat_scores.txt
  * File format per line:  name,score,level
+ *
+ * <p>Scores are persisted in {@value #SCORES_FILE} as CSV with three comma-separated
+ * fields per line. On construction the file is read and sorted descending by score.
+ * A legacy two-field format (no name) is also handled gracefully.</p>
+ *
+ * <p>Only the top 10 entries are kept on disk; excess entries are dropped after each
+ * {@link #saveScore(String, int, int)} call.</p>
+ *
+ * @author Project Team
+ * @version 1.0
  */
 public class ScoreboardPanel extends JPanel {
 
+    /** Preferred panel width in pixels. */
     private static final int WIDTH  = 800;
+
+    /** Preferred panel height in pixels. */
     private static final int HEIGHT = 700;
+
+    /** Name of the local file used to persist high scores. */
     private static final String SCORES_FILE = "gridbeat_scores.txt";
 
+    /** In-memory list of loaded score entries, sorted descending by score. */
     private List<ScoreEntry> scores;
+
+    /** Callback invoked when the player clicks the Back button. */
     private Runnable onBack;
+
+    /** Bounding rectangle of the Back button. */
     private Rectangle backButton;
+
+    /** {@code true} when the mouse is hovering over the Back button. */
     private boolean backHovered;
 
+    /**
+     * Constructs a new {@code ScoreboardPanel}: sets preferred size and background,
+     * positions the Back button, loads scores from disk, and registers mouse listeners.
+     */
     public ScoreboardPanel() {
         setPreferredSize(new Dimension(WIDTH, HEIGHT));
         setBackground(new Color(5, 5, 16));
@@ -51,6 +77,15 @@ public class ScoreboardPanel extends JPanel {
 
     // ── Load ─────────────────────────────────────────────────────────────────
 
+    /**
+     * Reads all score entries from {@value #SCORES_FILE}, parses each line, and
+     * rebuilds the in-memory list sorted descending by score. Missing or malformed
+     * files are handled silently (an empty list is returned).
+     *
+     * <p>Supports both the current three-field format ({@code name,score,level}) and
+     * a legacy two-field format ({@code score,level}), substituting {@code "???"} for
+     * the missing name.</p>
+     */
     public void loadScores() {
         scores.clear();
         try {
@@ -83,6 +118,15 @@ public class ScoreboardPanel extends JPanel {
 
     /**
      * Add a named score entry and persist the top-10 to disk.
+     *
+     * <p>The name is sanitised: commas are stripped, leading/trailing whitespace
+     * removed, length capped at 16 characters, and the result is uppercased.
+     * The list is re-sorted after insertion and trimmed to at most 10 entries
+     * before writing to {@value #SCORES_FILE}.</p>
+     *
+     * @param name  the player's display name; sanitised before storage
+     * @param score the final accumulated score
+     * @param level the highest difficulty level reached
      */
     public void saveScore(String name, int score, int level) {
         String safeName = name.replaceAll(",", "").trim();
@@ -108,6 +152,13 @@ public class ScoreboardPanel extends JPanel {
 
     // ── Render ───────────────────────────────────────────────────────────────
 
+    /**
+     * Paints the scoreboard: title, separator, column headers, up to 10 score rows
+     * (gold/silver/bronze highlights for the top three), an empty-state message
+     * when there are no scores, and the Back button.
+     *
+     * @param g the Swing {@link Graphics} context
+     */
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -184,18 +235,45 @@ public class ScoreboardPanel extends JPanel {
                 backButton.y + (backButton.height + fm.getAscent()) / 2 - 5);
     }
 
+    /**
+     * Registers the callback invoked when the player clicks the Back button.
+     *
+     * @param callback the {@link Runnable} to execute; must not be {@code null}
+     */
     public void setOnBack(Runnable callback) { this.onBack = callback; }
 
     // ── Inner class ──────────────────────────────────────────────────────────
 
+    /**
+     * Immutable value object representing one high-score entry.
+     * Implements {@link Comparable} to sort in descending score order.
+     */
     private static class ScoreEntry implements Comparable<ScoreEntry> {
+
+        /** Player display name. */
         String name;
+
+        /** Accumulated score for this session. */
+        /** Highest difficulty level reached in this session. */
         int    score, level;
 
+        /**
+         * Constructs a new {@code ScoreEntry}.
+         *
+         * @param name  player display name
+         * @param score accumulated score
+         * @param level highest level reached
+         */
         ScoreEntry(String name, int score, int level) {
             this.name = name; this.score = score; this.level = level;
         }
 
+        /**
+         * Compares this entry to another for descending score ordering.
+         *
+         * @param o the entry to compare against
+         * @return negative if this entry's score is higher, positive if lower
+         */
         @Override
         public int compareTo(ScoreEntry o) { return Integer.compare(o.score, score); }
     }

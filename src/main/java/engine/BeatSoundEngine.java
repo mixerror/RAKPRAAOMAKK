@@ -15,24 +15,61 @@ import javax.sound.sampled.*;
  *
  * All synthesized — no audio files required.
  * Press M to mute / unmute.
+ *
+ * <p>All audio processing runs on a dedicated background daemon thread so the
+ * game loop is never blocked. One-shot sound effects ({@link #playHurtSound()},
+ * {@link #playGameOverSound()}, {@link #playClickSound()}) each spawn their own
+ * short-lived daemon thread.</p>
+ *
+ * <p>Usage:</p>
+ * <pre>
+ *   BeatSoundEngine engine = new BeatSoundEngine();
+ *   SoundManager.register(engine);
+ *   engine.start(1);
+ *   engine.setMuted(true);   // silence without stopping the thread
+ *   engine.shutdown();       // release resources on exit
+ * </pre>
+ *
+ * @author Project Team
+ * @version 1.0
  */
 public class BeatSoundEngine {
 
     // ── Config ────────────────────────────────────────────────────────────────
 
+    /** PCM sample rate in Hz used for all synthesis and playback. */
     private static final int    SAMPLE_RATE  = 44100;
+
+    /** Number of stereo frames rendered and written to the line per iteration. */
     private static final int    CHUNK        = 512;   // samples per render chunk
+
+    /** Fixed tempo for the background music track, in beats per minute. */
     private static final double BPM          = 110.0;
+
+    /** Duration of one beat in seconds, derived from {@link #BPM}. */
     private static final double BEAT_SEC     = 60.0 / BPM;          // ~0.545s
+
+    /** Duration of one 16th-note subdivision in seconds. */
     private static final double SIXTEENTH    = BEAT_SEC / 4.0;      // 16th note
 
+    /** Peak amplitude of the kick drum voice in the final mix (0.0–1.0). */
     private static final float  VOL_KICK     = 0.55f;
+
+    /** Peak amplitude of the bass voice in the final mix (0.0–1.0). */
     private static final float  VOL_BASS     = 0.35f;
+
+    /** Peak amplitude of the arpeggio voice in the final mix (0.0–1.0). */
     private static final float  VOL_ARP      = 0.22f;
+
+    /** Peak amplitude of the pad voice in the final mix (0.0–1.0). */
     private static final float  VOL_PAD      = 0.18f;
 
     // ── Chord progression: A  F#m  D  E  (each chord = 1 bar = 4 beats) ─────
     // Root frequencies (Hz) for bass + pad
+    /**
+     * Root note frequencies (Hz) for the four-chord progression A – F♯m – D – E.
+     * Index 0 = A3 (220 Hz), 1 = F♯3, 2 = D3, 3 = E3.
+     */
     private static final double[] CHORD_ROOT = {
             220.00,  // A3
             185.00,  // F#3  (≈184.997)
@@ -42,6 +79,10 @@ public class BeatSoundEngine {
 
     // Major / minor chord intervals (ratio multipliers for pad voices)
     // A major:  1, 5/4, 3/2   |  F#m: 1, 6/5, 3/2   |  D maj: 1, 5/4, 3/2  |  E maj
+    /**
+     * Frequency-ratio multipliers for the three pad voices of each chord.
+     * Rows correspond to {@link #CHORD_ROOT} indices; columns are root, third, fifth.
+     */
     private static final double[][] CHORD_RATIOS = {
             { 1.0, 1.2599, 1.4983 },   // A  major
             { 1.0, 1.1892, 1.4983 },   // F# minor
@@ -51,6 +92,10 @@ public class BeatSoundEngine {
 
     // Arpeggio pattern (semitone offsets from chord root, 16 steps per bar)
     // Bright ascending + descending flourish
+    /**
+     * Semitone offsets from the current chord root for each of the 16 arpeggio
+     * steps per bar. The pattern produces a bright ascending then descending flourish.
+     */
     private static final int[] ARP_SEMITONES = {
             0,  4,  7, 12,   // up
             16, 12,  7,  4,   // down
@@ -60,16 +105,40 @@ public class BeatSoundEngine {
 
     // ── State ─────────────────────────────────────────────────────────────────
 
+    /** Background thread running the {@link #stream()} render loop. */
     private Thread          playbackThread;
+
+    /** Set to {@code false} to request graceful shutdown of the stream loop. */
     private volatile boolean running = false;
+
+    /** When {@code true} all PCM samples are zeroed before writing to the line. */
     private volatile boolean muted   = false;
 
     // no-ops: music is fixed tempo, not BPM/level locked
+    /**
+     * No-op stub kept for API compatibility with other sound engine implementations.
+     * The background track runs at a fixed BPM and does not respond to this call.
+     *
+     * @param bpm ignored
+     */
     public void setBpm(int bpm)     {}
+
+    /**
+     * No-op stub kept for API compatibility with other sound engine implementations.
+     * The background track runs at a fixed tempo and does not respond to this call.
+     *
+     * @param level ignored
+     */
     public void setLevel(int level) {}
 
     // ── Public API ────────────────────────────────────────────────────────────
 
+    /**
+     * Starts the background music playback thread. Any previously running thread
+     * is stopped first via {@link #stop()} before the new one is created.
+     *
+     * @param bpm ignored by this implementation; the track plays at a fixed 110 BPM
+     */
     public void start(int bpm) {
         stop();
         running = true;
@@ -78,13 +147,35 @@ public class BeatSoundEngine {
         playbackThread.start();
     }
 
+    /**
+     * Signals the playback thread to exit at the next loop boundary and
+     * clears the thread reference. Returns immediately without waiting for
+     * the thread to finish.
+     */
     public void stop() {
         running = false;
         if (playbackThread != null) { playbackThread.interrupt(); playbackThread = null; }
     }
 
+    /**
+     * Mutes or unmutes the audio output. When muted, the render loop continues
+     * running (maintaining beat timing) but writes silence to the output line.
+     *
+     * @param m {@code true} to silence output; {@code false} to restore audio
+     */
     public void setMuted(boolean m) { muted = m; }
+
+    /**
+     * Returns whether the audio output is currently muted.
+     *
+     * @return {@code true} if muted
+     */
     public boolean isMuted()        { return muted; }
+
+    /**
+     * Stops playback and releases all audio resources. Equivalent to
+     * calling {@link #stop()}. Safe to call multiple times.
+     */
     public void shutdown()          { stop(); }
 
     // Sound Effects
@@ -171,6 +262,12 @@ public class BeatSoundEngine {
         t.start();
     }
 
+    /**
+     * Opens a mono 16-bit PCM {@link SourceDataLine}, writes the supplied buffer
+     * in one call, drains it, and closes the line. Used for one-shot sound effects.
+     *
+     * @param buf little-endian signed 16-bit mono PCM samples (2 bytes per frame)
+     */
     private void playMonoPcm(byte[] buf) {
         try {
             AudioFormat fmt = new AudioFormat(
@@ -190,6 +287,17 @@ public class BeatSoundEngine {
 
     // ── Main streaming loop ───────────────────────────────────────────────────
 
+    /**
+     * Main PCM streaming loop executed on {@link #playbackThread}.
+     *
+     * <p>Opens a stereo 16-bit 44.1 kHz {@link SourceDataLine} and renders
+     * {@link #CHUNK} stereo frames per iteration by synthesising and mixing the
+     * four voices (kick, bass, arpeggio, pad). Runs until {@link #running} is
+     * set to {@code false} or the thread is interrupted.</p>
+     *
+     * <p>The output is passed through a soft tanh clipper to prevent digital
+     * clipping from voice accumulation, then written directly to the audio line.</p>
+     */
     private void stream() {
         AudioFormat fmt = new AudioFormat(
                 AudioFormat.Encoding.PCM_SIGNED,

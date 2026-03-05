@@ -9,15 +9,42 @@ import java.awt.*;
  * CLASS: Player
  * The player character that moves on the grid.
  * Renders as a glowing cyan square.
+ *
+ * <p>The player occupies exactly one {@link GridCell} at a time and moves one
+ * cell per key press in the four cardinal directions. Out-of-bounds moves are
+ * silently ignored. A pulsing glow animation is advanced each frame via
+ * {@link #update()}. Collision detection is performed externally by
+ * {@link engine.GameEngine}.</p>
+ *
+ * @author Project Team
+ * @version 1.0
+ * @see Board
+ * @see GridCell
  */
 public class Player implements Renderable {
     
+    /** Current row and column indices on the {@link Board} grid (0-based). */
     private int gridRow, gridCol;
+
+    /** Reference to the board used for bounds checking and cell lookup. */
     private Board board;
+
+    /**
+     * Monotonically increasing phase value (in radians) driving the pulse animation.
+     * Incremented by 0.1 each frame in {@link #update()}.
+     */
     private float pulseTime;
     
+    /** Base fill colour for the player avatar. */
     private static final Color PLAYER_COLOR = new Color(0, 255, 204);
     
+    /**
+     * Constructs a new {@code Player} at the specified grid position on the given board.
+     *
+     * @param startRow initial row index
+     * @param startCol initial column index
+     * @param board    the game board; used for bounds validation and cell lookup
+     */
     public Player(int startRow, int startCol, Board board) {
         this.gridRow = startRow;
         this.gridCol = startCol;
@@ -25,6 +52,14 @@ public class Player implements Renderable {
         this.pulseTime = 0;
     }
     
+    /**
+     * Moves the player by the given row and column deltas if the destination
+     * is within the board boundaries. The move is silently ignored when it
+     * would place the player outside the grid.
+     *
+     * @param deltaRow row offset to apply: {@code -1} = up, {@code +1} = down, {@code 0} = no change
+     * @param deltaCol column offset to apply: {@code -1} = left, {@code +1} = right, {@code 0} = no change
+     */
     public void move(int deltaRow, int deltaCol) {
         int newRow = gridRow + deltaRow;
         int newCol = gridCol + deltaCol;
@@ -35,10 +70,23 @@ public class Player implements Renderable {
         }
     }
     
+    /**
+     * Advances the pulse animation by one frame. Call once per game tick from
+     * the game loop before {@link #render(Graphics2D)}.
+     */
     public void update() {
         pulseTime += 0.1f;
     }
     
+    /**
+     * Renders the player avatar centred on the current {@link GridCell}.
+     *
+     * <p>Draws a cyan rounded square with a pulsing outer glow ring whose radius
+     * oscillates with {@link #pulseTime}, plus a small bright white highlight in
+     * the centre of the square.</p>
+     *
+     * @param g the {@link Graphics2D} context; anti-aliasing is enabled inside this method
+     */
     @Override
     public void render(Graphics2D g) {
         GridCell cell = board.getCell(gridRow, gridCol);
@@ -69,6 +117,17 @@ public class Player implements Renderable {
         g.fillRoundRect(x + size/3, y + size/3, size/3, size/3, 3, 3);
     }
     
+    /**
+     * Returns the player's current row index on the board.
+     *
+     * @return row index (0-based)
+     */
     public int getGridRow() { return gridRow; }
+
+    /**
+     * Returns the player's current column index on the board.
+     *
+     * @return column index (0-based)
+     */
     public int getGridCol() { return gridCol; }
 }
