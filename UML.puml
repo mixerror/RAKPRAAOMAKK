@@ -1,0 +1,404 @@
+@startuml
+class patterns.ColumnHazard {
++ <<Create>> ColumnHazard(Board,int,int)
+- {static} List<int[]> createColumnTiles(int,int)
+}
+
+class patterns.BorderHazard {
++ <<Create>> BorderHazard(Board,int)
+- {static} List<int[]> createBorderTiles(int)
+}
+
+class patterns.CornersHazard {
++ <<Create>> CornersHazard(Board,int)
+- {static} List<int[]> createCornerTiles(int)
+}
+
+abstract class patterns.Hazard {
+# Board board
+# List<int[]> tiles
+# int countdown
+# boolean active
+# boolean finished
++ <<Create>> Hazard(Board,List<int[]>,int)
++ void update()
++ void decrementCountdown()
++ void activate()
++ void finish()
++ boolean isActive()
++ boolean isFinished()
++ boolean checkHit(int,int)
++ List<int[]> getTiles()
+}
+
+
+class patterns.DiagonalHazard {
++ <<Create>> DiagonalHazard(Board,boolean,int)
+- {static} List<int[]> createDiagonalTiles(int,boolean)
+}
+
+class patterns.LShapeHazard {
++ <<Create>> LShapeHazard(Board,int)
+- {static} List<int[]> createLShapeTiles(int)
+}
+
+class engine.GameEngine {
+- {static} int WIDTH
+- {static} int HEIGHT
+- {static} int FPS
+- Board board
+- Player player
+- GameState gameState
+- List<Hazard> hazards
+- Set<Hazard> hazardsHitThisCycle
+- Random random
+- boolean running
+- long lastBeatTime
+- int beatTimer
+- int beatInterval
+- BeatSoundEngine beatSound
+- boolean gameStarted
+- boolean showingGameOver
+- boolean paused
+- Rectangle playAgainButton
+- Rectangle mainMenuButton
+- boolean playAgainHovered
+- boolean mainMenuHovered
+- GameOverCallback onGameOverCallback
+- Runnable onMainMenuCallback
++ <<Create>> GameEngine()
+- void handleKeyPress(int)
++ void startGame()
+- void togglePause()
++ void run()
+- void update()
+- void onBeat()
+- void applyPlayerHit()
+- void spawnRandomPattern()
+- void updateBeatInterval()
++ void applyTheme(SettingsPanel.BoardStyle)
++ void applyVolume(float)
++ void setOnGameOver(GameOverCallback)
++ void setOnMainMenu(Runnable)
++ BeatSoundEngine getSoundEngine()
+# void paintComponent(Graphics)
+- void drawStartScreen(Graphics2D)
+- void drawHUD(Graphics2D)
+- void drawGameOver(Graphics2D)
+- void drawGameOverButton(Graphics2D,Rectangle,String,boolean)
+- void drawPauseOverlay(Graphics2D)
++ int getWidth()
++ int getHeight()
+}
+
+
+interface engine.GameEngine$GameOverCallback {
+~ void onGameOver(int,int)
+}
+
+interface interfaces.Updatable {
+~ void update()
+}
+
+class engine.ScoreboardPanel {
+- {static} int WIDTH
+- {static} int HEIGHT
+- {static} String SCORES_FILE
+- List<ScoreEntry> scores
+- Runnable onBack
+- Rectangle backButton
+- boolean backHovered
++ <<Create>> ScoreboardPanel()
++ void loadScores()
++ void saveScore(String,int,int)
+# void paintComponent(Graphics)
++ void setOnBack(Runnable)
+}
+
+
+class engine.ScoreboardPanel$ScoreEntry {
+~ String name
+~ int score
+~ <<Create>> ScoreEntry(String,int,int)
++ int compareTo(ScoreEntry)
+}
+
+
+class engine.SettingsPanel {
+- {static} int WIDTH
+- {static} int HEIGHT
+- BoardStyle selectedStyle
+- Runnable onBack
+- Rectangle backButton
++ <<Create>> SettingsPanel()
+# void paintComponent(Graphics)
++ void setOnBack(Runnable)
++ BoardStyle getSelectedStyle()
+}
+
+
+enum engine.BoardStyle {
++  DARK_BLUE
++  PURPLE
++  GREEN
++  RED
++  CYBERPUNK
+~ String name
++ Color dark
++ Color light
+~ <<Create>> BoardStyle(String,Color,Color)
+}
+
+
+class patterns.XShapeHazard {
++ <<Create>> XShapeHazard(Board,int)
+- {static} List<int[]> createXShapeTiles(int)
+}
+
+class engine.TutorialPanel {
+- {static} int WIDTH
+- {static} int HEIGHT
+- int currentPage
+- {static} int TOTAL_PAGES
+- Rectangle nextButton
+- Rectangle prevButton
+- Rectangle skipButton
+- Runnable onComplete
+- Runnable onMainMenu
++ <<Create>> TutorialPanel()
+# void paintComponent(Graphics)
+- void drawPage1(Graphics2D)
+- void drawPage2(Graphics2D)
+- void drawPage3(Graphics2D)
+- void drawKey(Graphics2D,String,int,int)
+- void drawButtons(Graphics2D)
++ void reset()
++ void setOnComplete(Runnable)
++ void setOnMainMenu(Runnable)
+}
+
+
+class grid.GridCell {
+- int gridRow
+- int x
+- boolean isDanger
+- boolean isActive
+- int countdown
+- Color baseDark
+- Color baseLight
+- {static} Color BORDER
+- {static} Color DANGER_BORDER
+- {static} Color ACTIVE_BORDER
+- {static} Color COUNTDOWN_COLOR
++ <<Create>> GridCell(int,int,int,int,int)
++ void setTheme(BoardStyle)
++ void reset()
++ void setDanger(int)
++ void setActive()
++ void render(Graphics2D)
++ int getGridRow()
++ int getGridCol()
++ int getX()
++ int getY()
++ int getSize()
+}
+
+
+class entities.Player {
+- int gridRow
+- Board board
+- float pulseTime
+- {static} Color PLAYER_COLOR
++ <<Create>> Player(int,int,Board)
++ void move(int,int)
++ void update()
++ void render(Graphics2D)
++ int getGridRow()
++ int getGridCol()
+}
+
+
+class engine.BeatSoundEngine {
+- {static} int SAMPLE_RATE
+- {static} int CHUNK
+- {static} double BPM
+- {static} double BEAT_SEC
+- {static} double SIXTEENTH
+- {static} float VOL_KICK
+- {static} float VOL_BASS
+- {static} float VOL_ARP
+- {static} float VOL_PAD
+- {static} double[] CHORD_ROOT
+- {static} double[][] CHORD_RATIOS
+- {static} int[] ARP_SEMITONES
+- Thread playbackThread
+- boolean running
+- boolean muted
+- float volume
++ void setBpm(int)
++ void setLevel(int)
++ void start(int)
++ void stop()
++ void setMuted(boolean)
++ boolean isMuted()
++ void setVolume(float)
++ float getVolume()
++ void shutdown()
++ void playHurtSound()
++ void playGameOverSound()
++ void playClickSound()
+- void playMonoPcm(byte[])
+- void stream()
+}
+
+
+class grid.Board {
+- {static} int GRID_SIZE
+- {static} int CELL_SIZE
+- {static} int GAP
+- {static} int PADDING
+- GridCell[][] cells
+- int boardX
+- int boardWidth
++ <<Create>> Board(int,int)
++ void resetAllCells()
++ void setTheme(BoardStyle)
++ GridCell getCell(int,int)
++ boolean isValidPosition(int,int)
++ void render(Graphics2D)
++ int getGridSize()
+}
+
+
+class patterns.CheckerHazard {
++ <<Create>> CheckerHazard(Board,boolean,int)
+- {static} List<int[]> createCheckerTiles(int,boolean)
+}
+
+class engine.MainMenu {
+- {static} int WIDTH
+- {static} int HEIGHT
+- List<MenuButton> buttons
+- Runnable onStartGame
+- Runnable onShowTutorial
+- Runnable onShowScoreboard
+- Runnable onShowSettings
+- Runnable onQuit
++ <<Create>> MainMenu()
+- void handleButtonClick(MenuButton)
+# void paintComponent(Graphics)
++ void setOnStartGame(Runnable)
++ void setOnShowTutorial(Runnable)
++ void setOnShowScoreboard(Runnable)
++ void setOnShowSettings(Runnable)
++ void setOnQuit(Runnable)
+}
+
+
+class engine.MainMenu$MenuButton {
+- String text
+- int x
+- boolean hovered
++ <<Create>> MenuButton(String,int,int,int,int)
++ void render(Graphics2D)
++ boolean contains(int,int)
++ String getText()
++ boolean isHovered()
++ void setHovered(boolean)
+}
+
+
+class engine.SoundManager {
+- {static} BeatSoundEngine instance
++ {static} void register(BeatSoundEngine)
++ {static} void click()
++ {static} void hurt()
++ {static} void gameOver()
++ {static} void setVolume(float)
++ {static} float getVolume()
+}
+
+
+class patterns.RowHazard {
++ <<Create>> RowHazard(Board,int,int)
+- {static} List<int[]> createRowTiles(int,int)
+}
+
+class engine.GameLauncher {
+- CardLayout cardLayout
+- JPanel cardPanel
+- MainMenu mainMenu
+- GameEngine gameEngine
+- ScoreboardPanel scoreboardPanel
+- SettingsPanel settingsPanel
+- TutorialPanel tutorialPanel
+- BeatSoundEngine uiSound
++ <<Create>> GameLauncher()
+- void setupMainMenu()
+- void setupGameEngine()
+- void setupScoreboard()
+- void setupSettings()
+- void setupTutorial()
+- String askPlayerName(int,int)
+- void showMainMenu()
++ {static} void main(String[])
+}
+
+
+class engine.GameState {
+- int score
+- int combo
+- int lives
+- int level
+- int beatsSurvived
+- int beatsToNextLevel
+- {static} int MAX_COMBO
+- {static} int STARTING_LIVES
+- {static} int BASE_BPM
++ <<Create>> GameState()
++ void reset()
++ void addScore(int)
++ void incrementCombo()
++ void resetCombo()
++ void loseLife()
++ void surviveBeat()
+- void levelUp()
++ int getBPM()
++ boolean isGameOver()
++ int getScore()
++ int getCombo()
++ int getLives()
++ int getLevel()
+}
+
+
+interface interfaces.Renderable {
+~ void render(Graphics2D)
+}
+
+
+
+patterns.Hazard <|-- patterns.ColumnHazard
+patterns.Hazard <|-- patterns.BorderHazard
+patterns.Hazard <|-- patterns.CornersHazard
+interfaces.Updatable <|.. patterns.Hazard
+patterns.Hazard <|-- patterns.DiagonalHazard
+patterns.Hazard <|-- patterns.LShapeHazard
+engine.Runnable <|.. engine.GameEngine
+engine.JPanel <|-- engine.GameEngine
+engine.GameEngine +.. engine.GameEngine$GameOverCallback
+engine.JPanel <|-- engine.ScoreboardPanel
+engine.ScoreboardPanel +.. engine.ScoreboardPanel$ScoreEntry
+engine.Comparable <|.. engine.ScoreboardPanel$ScoreEntry
+engine.JPanel <|-- engine.SettingsPanel
+patterns.Hazard <|-- patterns.XShapeHazard
+engine.JPanel <|-- engine.TutorialPanel
+interfaces.Renderable <|.. grid.GridCell
+interfaces.Renderable <|.. entities.Player
+interfaces.Renderable <|.. grid.Board
+patterns.Hazard <|-- patterns.CheckerHazard
+engine.JPanel <|-- engine.MainMenu
+engine.MainMenu +.. engine.MainMenu$MenuButton
+patterns.Hazard <|-- patterns.RowHazard
+engine.JFrame <|-- engine.GameLauncher
+@enduml
