@@ -33,6 +33,9 @@ public class MainMenu extends JPanel {
     /** Callback fired when the player clicks "Start Game". */
     private Runnable onStartGame;
 
+    /** Callback fired when the player clicks "HOW TO PLAY". */
+    private Runnable onShowTutorial;
+
     /** Callback fired when the player clicks "Scoreboard". */
     private Runnable onShowScoreboard;
 
@@ -58,15 +61,17 @@ public class MainMenu extends JPanel {
         int buttonWidth = 300;
         int buttonHeight = 60;
         int centerX = (WIDTH - buttonWidth) / 2;
-        int startY = 320;
+        int startY = 280;
         int spacing = 80;
 
         MenuButton startBtn = new MenuButton("START GAME", centerX, startY, buttonWidth, buttonHeight);
-        MenuButton scoreBtn = new MenuButton("SCOREBOARD", centerX, startY + spacing, buttonWidth, buttonHeight);
-        MenuButton settingsBtn = new MenuButton("SETTINGS", centerX, startY + spacing * 2, buttonWidth, buttonHeight);
-        MenuButton quitBtn = new MenuButton("QUIT", centerX, startY + spacing * 3, buttonWidth, buttonHeight);
+        MenuButton tutorialBtn = new MenuButton("HOW TO PLAY", centerX, startY + spacing, buttonWidth, buttonHeight);
+        MenuButton scoreBtn = new MenuButton("SCOREBOARD", centerX, startY + spacing * 2, buttonWidth, buttonHeight);
+        MenuButton settingsBtn = new MenuButton("SETTINGS", centerX, startY + spacing * 3, buttonWidth, buttonHeight);
+        MenuButton quitBtn = new MenuButton("QUIT", centerX, startY + spacing * 4, buttonWidth, buttonHeight);
 
         buttons.add(startBtn);
+        buttons.add(tutorialBtn);
         buttons.add(scoreBtn);
         buttons.add(settingsBtn);
         buttons.add(quitBtn);
@@ -108,10 +113,12 @@ public class MainMenu extends JPanel {
      * @param btn the button that was clicked; its text is used to dispatch the action
      */
     private void handleButtonClick(MenuButton btn) {
-        SoundManager.click();
         switch (btn.getText()) {
             case "START GAME":
                 if (onStartGame != null) onStartGame.run();
+                break;
+            case "HOW TO PLAY":
+                if (onShowTutorial != null) onShowTutorial.run();
                 break;
             case "SCOREBOARD":
                 if (onShowScoreboard != null) onShowScoreboard.run();
@@ -164,6 +171,12 @@ public class MainMenu extends JPanel {
      */
     public void setOnStartGame(Runnable callback) { this.onStartGame = callback; }
 
+    /**
+     * Registers the callback invoked when the player clicks "HOW TO PLAY".
+     *
+     * @param callback the {@link Runnable} to execute; must not be {@code null}
+     */
+    public void setOnShowTutorial(Runnable callback) { this.onShowTutorial = callback; }
     /**
      * Registers the callback invoked when the player clicks "Scoreboard".
      *

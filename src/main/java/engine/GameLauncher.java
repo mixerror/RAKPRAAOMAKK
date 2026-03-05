@@ -38,6 +38,9 @@ public class GameLauncher extends JFrame {
     /** The board-theme selection settings panel. */
     private SettingsPanel  settingsPanel;
 
+    /** dont forget to fill this !!!!!!!!!!! */
+    private TutorialPanel tutorialPanel;
+
     /**
      * Constructs the application window: creates all screen panels, wires
      * navigation callbacks between them, adds them to the card layout, packs
@@ -55,16 +58,19 @@ public class GameLauncher extends JFrame {
         gameEngine      = new GameEngine();
         scoreboardPanel = new ScoreboardPanel();
         settingsPanel   = new SettingsPanel();
+        tutorialPanel = new TutorialPanel();
 
         setupMainMenu();
         setupGameEngine();
         setupScoreboard();
         setupSettings();
+        setupTutorial();
 
         cardPanel.add(mainMenu,        "MENU");
         cardPanel.add(gameEngine,      "GAME");
         cardPanel.add(scoreboardPanel, "SCOREBOARD");
         cardPanel.add(settingsPanel,   "SETTINGS");
+        cardPanel.add(tutorialPanel, "TUTORIAL");
 
         add(cardPanel);
         pack();
@@ -81,9 +87,14 @@ public class GameLauncher extends JFrame {
     private void setupMainMenu() {
         mainMenu.setOnStartGame(() -> {
             gameEngine.applyTheme(settingsPanel.getSelectedStyle());
+            SoundManager.setVolume(settingsPanel.getSelectedVolume());
             cardLayout.show(cardPanel, "GAME");
             gameEngine.requestFocus();
             gameEngine.startGame();
+        });
+        mainMenu.setOnShowTutorial(() -> {
+            tutorialPanel.reset();
+            cardLayout.show(cardPanel, "TUTORIAL");
         });
         mainMenu.setOnShowScoreboard(() -> {
             scoreboardPanel.loadScores();
@@ -123,6 +134,19 @@ public class GameLauncher extends JFrame {
         settingsPanel.setOnBack(this::showMainMenu);
     }
 
+    /**
+     * Don't forget to fill this!!!!!!!!!!!
+     */
+    private void setupTutorial() {
+        tutorialPanel.setOnComplete(() -> {
+            // After tutorial, go straight to game
+            gameEngine.applyTheme(settingsPanel.getSelectedStyle());
+            SoundManager.setVolume(settingsPanel.getSelectedVolume());
+            cardLayout.show(cardPanel, "GAME");
+            gameEngine.requestFocus();
+            gameEngine.startGame();
+        });
+    }
     // ── Name-entry dialog ────────────────────────────────────────────────────
 
     /**

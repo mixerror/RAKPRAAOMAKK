@@ -85,6 +85,19 @@ public class GameEngine extends JPanel implements Runnable {
     /** When {@code true} the game loop skips {@link #update()} but still repaints. */
     private volatile boolean paused;
 
+    /**
+     * Timestamp (ms) of the last time the player took damage.
+     * Used to enforce a brief invincibility window so a single active hazard
+     * can only deal damage once per activation, not every frame.
+     */
+    private long lastHitTime = 0;
+
+    /**
+     * Set of hazard identity hash codes that have already hit the player during
+     * their current active phase, preventing repeated damage from the same hazard.
+     */
+    private final java.util.Set<Integer> hazardsHitThisCycle = new java.util.HashSet<>();
+
     // Game over screen buttons
     /** Bounding rectangle of the "Play Again" button on the game-over screen. */
     private Rectangle playAgainButton;
@@ -257,6 +270,7 @@ public class GameEngine extends JPanel implements Runnable {
         paused = false;
         gameState.reset();
         hazards.clear();
+        hazardsHitThisCycle.clear();
         player = new Player(2, 2, board);
 
         lastBeatTime = System.currentTimeMillis();
@@ -319,6 +333,11 @@ public class GameEngine extends JPanel implements Runnable {
      * <p>Checks whether a beat interval has elapsed and fires {@link #onBeat()} if so.
      * Updates the player animation, resets all board cells, then polymorphically
      * updates all active hazards and removes finished ones.</p>
+     *
+     * <p>Real-time collision: if the player is standing on any <em>active</em> hazard
+     * tile this frame, damage is applied immediately rather than waiting for the next
+     * beat. A per-hazard hit flag prevents the same activation from dealing damage
+     * more than once.</p>
      */
     private void update() {
         // Beat timing
@@ -335,77 +354,101 @@ public class GameEngine extends JPanel implements Runnable {
         board.resetAllCells();
 
         // POLYMORPHISM: update() called on all Hazard references
-        // Java resolves to RowHazard.update(), ColumnHazard.update(), etc.
         for (Hazard h : hazards) {
-            h.update();  // ← POLYMORPHISM HERE
+            h.update();
         }
 
-        // Remove finished hazards
-        hazards.removeIf(Hazard::isFinished);
+        // ── Real-time collision ───────────────────────────────────────────────
+        // Damage the player the instant they stand on an active hazard tile,
+        // rather than waiting for the beat boundary.
+        if (running) {
+            int pRow = player.getGridRow();
+            int pCol = player.getGridCol();
+            for (Hazard h : hazards) {
+                if (h.isActive() && h.checkHit(pRow, pCol)) {
+                    int hazardId = System.identityHashCode(h);
+                    if (!hazardsHitThisCycle.contains(hazardId)) {
+                        hazardsHitThisCycle.add(hazardId);
+                        applyPlayerHit();
+                        if (!running) break; // game over — stop checking
+                    }
+                }
+            }
+        }
+
+        // Remove finished hazards and clear their hit-tracking entries
+        hazards.removeIf(h -> {
+            if (h.isFinished()) {
+                hazardsHitThisCycle.remove(System.identityHashCode(h));
+                return true;
+            }
+            return false;
+        });
+    }
+
+    /**
+     * Applies one hit of damage to the player: decrements a life, plays the hurt
+     * sound, and triggers the game-over sequence when lives reach zero.
+     */
+    private void applyPlayerHit() {
+        gameState.loseLife();
+        beatSound.playHurtSound();
+
+        if (gameState.isGameOver()) {
+            running = false;
+            showingGameOver = true;
+            beatSound.playGameOverSound();
+            beatSound.stop();
+            if (onGameOverCallback != null) {
+                final int finalScore = gameState.getScore();
+                final int finalLevel = gameState.getLevel();
+                new Thread(() -> {
+                    try { Thread.sleep(400); } catch (InterruptedException ignored) {}
+                    SwingUtilities.invokeLater(() ->
+                            onGameOverCallback.onGameOver(finalScore, finalLevel));
+                }).start();
+            }
+        }
     }
 
     /**
      * Processes a single beat event.
      *
-     * <p>Increments the survived-beat counter in {@link GameState}, checks for
-     * player collision with each active hazard, awards score for successful dodges,
-     * triggers the game-over sequence if lives reach zero, and spawns new hazard
-     * patterns. Also updates the beat interval via {@link #updateBeatInterval()}.</p>
+     * <p>Increments the survived-beat counter, awards score and combo for each
+     * hazard the player successfully avoided (i.e. was active but not on the
+     * player's tile), advances hazard lifecycles, spawns new patterns, and
+     * updates the beat interval.</p>
+     *
+     * <p>Hit detection is <em>not</em> performed here — damage is applied in
+     * real-time by {@link #update()} the instant the player steps onto an active
+     * hazard tile.</p>
      */
     private void onBeat() {
         gameState.surviveBeat();
 
-        // Reset player movement for new beat
-        //player.resetMove();
-
-        // Update all hazards
+        // Advance hazard lifecycles and award score for dodged active hazards
         for (int i = hazards.size() - 1; i >= 0; i--) {
             Hazard h = hazards.get(i);
-
             if (h.isActive()) {
-                // Check collision
-                if (h.checkHit(player.getGridRow(), player.getGridCol())) {
-                    gameState.loseLife();
-                    beatSound.playHurtSound();
-
-                    if (gameState.isGameOver()) {
-                        running = false;
-                        showingGameOver = true;
-                        beatSound.playGameOverSound();
-                        beatSound.stop();
-                        // Trigger name dialog + score save via callback
-                        if (onGameOverCallback != null) {
-                            final int finalScore = gameState.getScore();
-                            final int finalLevel = gameState.getLevel();
-                            new Thread(() -> {
-                                // Small delay so game-over screen renders first
-                                try { Thread.sleep(400); } catch (InterruptedException ignored) {}
-                                SwingUtilities.invokeLater(() ->
-                                        onGameOverCallback.onGameOver(finalScore, finalLevel));
-                            }).start();
-                        }
-                    }
-                } else {
-                    // Survived!
+                // Player survived this active hazard (real-time hit already handled)
+                int pRow = player.getGridRow();
+                int pCol = player.getGridCol();
+                if (!h.checkHit(pRow, pCol)) {
+                    // Successfully dodged — reward score and combo
                     gameState.addScore(100);
                     gameState.incrementCombo();
                 }
-
                 h.finish();
             } else {
                 h.decrementCountdown();
             }
         }
 
-        // Spawn new patterns MORE FREQUENTLY and MORE AT ONCE
-        // Allow up to 5 overlapping hazards (was 3)
+        // Spawn new patterns
         if (hazards.size() < 5) {
-            // Spawn EVERY beat at higher levels
             if (gameState.getLevel() >= 3 || random.nextInt(2) == 0) {
                 spawnRandomPattern();
             }
-
-            // Chance for DOUBLE spawn at high levels
             if (gameState.getLevel() >= 5 && hazards.size() < 4 && random.nextDouble() < 0.4) {
                 spawnRandomPattern();
             }

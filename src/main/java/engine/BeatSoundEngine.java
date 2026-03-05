@@ -114,6 +114,9 @@ public class BeatSoundEngine {
     /** When {@code true} all PCM samples are zeroed before writing to the line. */
     private volatile boolean muted   = false;
 
+    /** Master volume level, range 0.0 (silent) to 1.0 (full). */
+    private volatile float   volume  = 0.8f;
+
     // no-ops: music is fixed tempo, not BPM/level locked
     /**
      * No-op stub kept for API compatibility with other sound engine implementations.
@@ -173,6 +176,20 @@ public class BeatSoundEngine {
     public boolean isMuted()        { return muted; }
 
     /**
+     * Sets the master volume for all audio output.
+     *
+     * @param v volume in the range [0.0, 1.0]; clamped if out of range
+     */
+    public void setVolume(float v)  { volume = Math.max(0f, Math.min(1f, v)); }
+
+    /**
+     * Returns the current master volume level.
+     *
+     * @return volume in the range [0.0, 1.0]
+     */
+    public float getVolume()        { return volume; }
+
+    /**
      * Stops playback and releases all audio resources. Equivalent to
      * calling {@link #stop()}. Safe to call multiple times.
      */
@@ -197,7 +214,7 @@ public class BeatSoundEngine {
                 double env   = Math.exp(-progress * 12.0);
                 double wave  = Math.signum(Math.sin(ph)) * 0.6 + Math.sin(ph) * 0.4;
                 double noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 6);
-                double s     = (wave * 0.75 + noise * 0.25) * env * 0.65;
+                double s     = (wave * 0.75 + noise * 0.25) * env * 0.65 * volume;
                 int pcm = Math.max(-32768, Math.min(32767, (int)(s * 32767)));
                 buf[i * 2]     = (byte)(pcm & 0xFF);
                 buf[i * 2 + 1] = (byte)((pcm >> 8) & 0xFF);
@@ -225,7 +242,7 @@ public class BeatSoundEngine {
                 double wave = Math.sin(ph) * 0.7
                         + Math.sin(ph * 2) * 0.2
                         + Math.sin(ph * 3) * 0.1;
-                double s    = wave * env * 0.55;
+                double s    = wave * env * 0.55 * volume;
                 int pcm = Math.max(-32768, Math.min(32767, (int)(s * 32767)));
                 buf[i * 2]     = (byte)(pcm & 0xFF);
                 buf[i * 2 + 1] = (byte)((pcm >> 8) & 0xFF);
@@ -251,7 +268,7 @@ public class BeatSoundEngine {
                 ph += 2 * Math.PI * 1100.0 / SAMPLE_RATE;
                 double tone  = Math.sin(ph) * 0.55 + Math.sin(ph * 2.4) * 0.25;
                 double noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 18);
-                double s     = (tone * 0.7 + noise * 0.3) * env * 0.50;
+                double s     = (tone * 0.7 + noise * 0.3) * env * 0.50 * volume;
                 int pcm = Math.max(-32768, Math.min(32767, (int)(s * 32767)));
                 buf[i * 2]     = (byte)(pcm & 0xFF);
                 buf[i * 2 + 1] = (byte)((pcm >> 8) & 0xFF);
@@ -425,8 +442,8 @@ public class BeatSoundEngine {
                     mixL = Math.tanh(mixL * 1.4) * 0.75;
                     mixR = Math.tanh(mixR * 1.4) * 0.75;
 
-                    int pcmL = muted ? 0 : Math.max(-32768, Math.min(32767, (int)(mixL * 32767)));
-                    int pcmR = muted ? 0 : Math.max(-32768, Math.min(32767, (int)(mixR * 32767)));
+                    int pcmL = muted ? 0 : Math.max(-32768, Math.min(32767, (int)(mixL * 32767 * volume)));
+                    int pcmR = muted ? 0 : Math.max(-32768, Math.min(32767, (int)(mixR * 32767 * volume)));
 
                     buf[i * 4]     = (byte)(pcmL & 0xFF);
                     buf[i * 4 + 1] = (byte)((pcmL >> 8) & 0xFF);

@@ -58,4 +58,23 @@ public class SoundManager {
     public static void gameOver() {
         if (instance != null) instance.playGameOverSound();
     }
+
+    /**
+     * Sets the master volume on the registered engine.
+     * No-op if no engine has been registered.
+     *
+     * @param v volume in the range [0.0, 1.0]
+     */
+    public static void setVolume(float v) {
+        if (instance != null) instance.setVolume(v);
+    }
+
+    /**
+     * Returns the current master volume from the registered engine, or 0.8 as default.
+     *
+     * @return volume in [0.0, 1.0]
+     */
+    public static float getVolume() {
+        return instance != null ? instance.getVolume() : 0.8f;
+    }
 }
