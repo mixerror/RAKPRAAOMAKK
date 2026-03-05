@@ -11,8 +11,10 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 /**
  * CLASS: GameEngine
@@ -58,6 +60,13 @@ public class GameEngine extends JPanel implements Runnable {
     /** All currently active hazard patterns. Polymorphically updated each frame. */
     private List<Hazard> hazards;
 
+    /**
+     * Tracks which hazards have already dealt damage during their current active
+     * phase so a single hazard activation can only hurt the player once, even
+     * though collision is checked every frame at 60 FPS.
+     */
+    private Set<Hazard> hazardsHitThisCycle;
+
     /** Random number generator used for hazard pattern selection and placement. */
     private Random random;
 
@@ -84,19 +93,6 @@ public class GameEngine extends JPanel implements Runnable {
 
     /** When {@code true} the game loop skips {@link #update()} but still repaints. */
     private volatile boolean paused;
-
-    /**
-     * Timestamp (ms) of the last time the player took damage.
-     * Used to enforce a brief invincibility window so a single active hazard
-     * can only deal damage once per activation, not every frame.
-     */
-    private long lastHitTime = 0;
-
-    /**
-     * Set of hazard identity hash codes that have already hit the player during
-     * their current active phase, preventing repeated damage from the same hazard.
-     */
-    private final java.util.Set<Integer> hazardsHitThisCycle = new java.util.HashSet<>();
 
     // Game over screen buttons
     /** Bounding rectangle of the "Play Again" button on the game-over screen. */
@@ -148,6 +144,7 @@ public class GameEngine extends JPanel implements Runnable {
         player = new Player(2, 2, board);
         gameState = new GameState();
         hazards = new ArrayList<>();
+        hazardsHitThisCycle = new HashSet<>();
         random = new Random();
 
         running = false;
@@ -333,11 +330,6 @@ public class GameEngine extends JPanel implements Runnable {
      * <p>Checks whether a beat interval has elapsed and fires {@link #onBeat()} if so.
      * Updates the player animation, resets all board cells, then polymorphically
      * updates all active hazards and removes finished ones.</p>
-     *
-     * <p>Real-time collision: if the player is standing on any <em>active</em> hazard
-     * tile this frame, damage is applied immediately rather than waiting for the next
-     * beat. A per-hazard hit flag prevents the same activation from dealing damage
-     * more than once.</p>
      */
     private void update() {
         // Beat timing
@@ -353,42 +345,84 @@ public class GameEngine extends JPanel implements Runnable {
         // Reset all cells first
         board.resetAllCells();
 
-        // POLYMORPHISM: update() called on all Hazard references
+        // Update warning hazards first, then active hazards.
+        // This guarantees that setActive() always has the final say on any cell
+        // that is targeted by both a warning hazard and an active hazard in the
+        // same frame — active state must visually win.
         for (Hazard h : hazards) {
-            h.update();
+            if (!h.isActive()) h.update();
+        }
+        for (Hazard h : hazards) {
+            if (h.isActive()) h.update();
         }
 
-        // ── Real-time collision ───────────────────────────────────────────────
-        // Damage the player the instant they stand on an active hazard tile,
-        // rather than waiting for the beat boundary.
-        if (running) {
-            int pRow = player.getGridRow();
-            int pCol = player.getGridCol();
-            for (Hazard h : hazards) {
-                if (h.isActive() && h.checkHit(pRow, pCol)) {
-                    int hazardId = System.identityHashCode(h);
-                    if (!hazardsHitThisCycle.contains(hazardId)) {
-                        hazardsHitThisCycle.add(hazardId);
-                        applyPlayerHit();
-                        if (!running) break; // game over — stop checking
-                    }
+        // Real-time collision: check every frame so damage triggers the instant
+        // the player steps onto an active hazard tile, not only on the beat.
+        for (Hazard h : hazards) {
+            if (h.isActive() && !hazardsHitThisCycle.contains(h)) {
+                if (h.checkHit(player.getGridRow(), player.getGridCol())) {
+                    hazardsHitThisCycle.add(h); // mark so this hazard can't hit again
+                    applyPlayerHit();
                 }
             }
         }
 
-        // Remove finished hazards and clear their hit-tracking entries
+        // Remove finished hazards and clear them from the hit-tracking set
         hazards.removeIf(h -> {
-            if (h.isFinished()) {
-                hazardsHitThisCycle.remove(System.identityHashCode(h));
-                return true;
-            }
+            if (h.isFinished()) { hazardsHitThisCycle.remove(h); return true; }
             return false;
         });
     }
 
     /**
-     * Applies one hit of damage to the player: decrements a life, plays the hurt
-     * sound, and triggers the game-over sequence when lives reach zero.
+     * Processes a single beat event.
+     *
+     * <p>Increments the survived-beat counter in {@link GameState}, checks for
+     * player collision with each active hazard, awards score for successful dodges,
+     * triggers the game-over sequence if lives reach zero, and spawns new hazard
+     * patterns. Also updates the beat interval via {@link #updateBeatInterval()}.</p>
+     */
+    private void onBeat() {
+        gameState.surviveBeat();
+
+        // Update all hazards — lifecycle only (collision is handled real-time in update())
+        for (int i = hazards.size() - 1; i >= 0; i--) {
+            Hazard h = hazards.get(i);
+
+            if (h.isActive()) {
+                // Award score for surviving an active hazard that didn't hit the player
+                if (!hazardsHitThisCycle.contains(h)) {
+                    gameState.addScore(100);
+                    gameState.incrementCombo();
+                }
+                h.finish();
+            } else {
+                h.decrementCountdown();
+            }
+        }
+
+        // Spawn new patterns MORE FREQUENTLY and MORE AT ONCE
+        // Allow up to 5 overlapping hazards (was 3)
+        if (hazards.size() < 5) {
+            // Spawn EVERY beat at higher levels
+            if (gameState.getLevel() >= 3 || random.nextInt(2) == 0) {
+                spawnRandomPattern();
+            }
+
+            // Chance for DOUBLE spawn at high levels
+            if (gameState.getLevel() >= 5 && hazards.size() < 4 && random.nextDouble() < 0.4) {
+                spawnRandomPattern();
+            }
+        }
+
+        // Update BPM based on level
+        updateBeatInterval();
+    }
+
+    /**
+     * Applies one hit to the player: decrements a life, plays the hurt sound,
+     * and triggers the game-over sequence if lives reach zero.
+     * Called from the real-time collision check in {@link #update()}.
      */
     private void applyPlayerHit() {
         gameState.loseLife();
@@ -409,53 +443,6 @@ public class GameEngine extends JPanel implements Runnable {
                 }).start();
             }
         }
-    }
-
-    /**
-     * Processes a single beat event.
-     *
-     * <p>Increments the survived-beat counter, awards score and combo for each
-     * hazard the player successfully avoided (i.e. was active but not on the
-     * player's tile), advances hazard lifecycles, spawns new patterns, and
-     * updates the beat interval.</p>
-     *
-     * <p>Hit detection is <em>not</em> performed here — damage is applied in
-     * real-time by {@link #update()} the instant the player steps onto an active
-     * hazard tile.</p>
-     */
-    private void onBeat() {
-        gameState.surviveBeat();
-
-        // Advance hazard lifecycles and award score for dodged active hazards
-        for (int i = hazards.size() - 1; i >= 0; i--) {
-            Hazard h = hazards.get(i);
-            if (h.isActive()) {
-                // Player survived this active hazard (real-time hit already handled)
-                int pRow = player.getGridRow();
-                int pCol = player.getGridCol();
-                if (!h.checkHit(pRow, pCol)) {
-                    // Successfully dodged — reward score and combo
-                    gameState.addScore(100);
-                    gameState.incrementCombo();
-                }
-                h.finish();
-            } else {
-                h.decrementCountdown();
-            }
-        }
-
-        // Spawn new patterns
-        if (hazards.size() < 5) {
-            if (gameState.getLevel() >= 3 || random.nextInt(2) == 0) {
-                spawnRandomPattern();
-            }
-            if (gameState.getLevel() >= 5 && hazards.size() < 4 && random.nextDouble() < 0.4) {
-                spawnRandomPattern();
-            }
-        }
-
-        // Update BPM based on level
-        updateBeatInterval();
     }
 
     /**
@@ -527,6 +514,18 @@ public class GameEngine extends JPanel implements Runnable {
     }
 
     /**
+     * Applies the given volume level to this engine's {@link BeatSoundEngine} and
+     * registers it with {@link SoundManager} so in-game sounds reflect the value
+     * the player set in the settings screen.
+     *
+     * @param volume volume in [0.0, 1.0]; clamped by {@link BeatSoundEngine}
+     */
+    public void applyVolume(float volume) {
+        beatSound.setVolume(volume);
+        SoundManager.register(beatSound);
+    }
+
+    /**
      * Registers a callback to be invoked on the EDT when the player loses all lives.
      *
      * @param callback receives the final score and level; pass {@code null} to clear
@@ -543,6 +542,14 @@ public class GameEngine extends JPanel implements Runnable {
      */
     public void setOnMainMenu(Runnable callback) {
         this.onMainMenuCallback = callback;
+    }
+
+    /**
+     * Returns the internal BeatSoundEngine so the launcher can register it
+     * with SoundManager when switching into the game screen.
+     */
+    public BeatSoundEngine getSoundEngine() {
+        return beatSound;
     }
 
     /**

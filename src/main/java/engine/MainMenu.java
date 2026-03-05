@@ -113,6 +113,7 @@ public class MainMenu extends JPanel {
      * @param btn the button that was clicked; its text is used to dispatch the action
      */
     private void handleButtonClick(MenuButton btn) {
+        SoundManager.click();
         switch (btn.getText()) {
             case "START GAME":
                 if (onStartGame != null) onStartGame.run();

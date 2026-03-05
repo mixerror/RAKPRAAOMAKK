@@ -108,21 +108,38 @@ public class GridCell implements Renderable {
      * Transitions this cell to the danger warning state and sets the countdown
      * number that will be displayed until the hazard fires.
      *
+     * <p>If the cell is already in the active (fired) state from another hazard,
+     * this call is ignored — active always takes visual priority over warning so
+     * overlapping hazards cannot hide a red-X tile behind a countdown number.</p>
+     *
+     * <p>When multiple warning hazards overlap on the same cell, the lowest
+     * (most urgent) countdown is kept so the player always sees the most
+     * pressing threat.</p>
+     *
      * @param countdown beats remaining until activation; must be &gt; 0
      */
     public void setDanger(int countdown) {
+        if (isActive) return; // active wins — never overwrite a red-X with a countdown
+        if (isDanger) {
+            // Already a warning: keep the most urgent (lowest) countdown
+            if (countdown < this.countdown) this.countdown = countdown;
+            return;
+        }
         this.isDanger = true;
         this.countdown = countdown;
-        this.isActive = false;
     }
 
     /**
      * Transitions this cell to the active (fired) state, displaying a red flash
      * with an X mark. The player must have vacated this cell or loses a life.
+     *
+     * <p>Active always wins over any warning state — calling this on a cell that
+     * is currently showing a countdown correctly promotes it to the fired state.</p>
      */
     public void setActive() {
         this.isActive = true;
         this.isDanger = false;
+        this.countdown = 0;
     }
 
     /**

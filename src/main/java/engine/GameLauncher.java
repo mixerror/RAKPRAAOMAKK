@@ -41,6 +41,9 @@ public class GameLauncher extends JFrame {
     /** dont forget to fill this !!!!!!!!!!! */
     private TutorialPanel tutorialPanel;
 
+    /** Dedicated sound engine for UI click sounds, active at all times. */
+    private BeatSoundEngine uiSound;
+
     /**
      * Constructs the application window: creates all screen panels, wires
      * navigation callbacks between them, adds them to the card layout, packs
@@ -58,7 +61,11 @@ public class GameLauncher extends JFrame {
         gameEngine      = new GameEngine();
         scoreboardPanel = new ScoreboardPanel();
         settingsPanel   = new SettingsPanel();
-        tutorialPanel = new TutorialPanel();
+        tutorialPanel   = new TutorialPanel();
+
+        // Register a UI sound engine so clicks work before the game starts
+        uiSound = new BeatSoundEngine();
+        SoundManager.register(uiSound);
 
         setupMainMenu();
         setupGameEngine();
@@ -87,7 +94,7 @@ public class GameLauncher extends JFrame {
     private void setupMainMenu() {
         mainMenu.setOnStartGame(() -> {
             gameEngine.applyTheme(settingsPanel.getSelectedStyle());
-            SoundManager.setVolume(settingsPanel.getSelectedVolume());
+            SoundManager.register(gameEngine.getSoundEngine());
             cardLayout.show(cardPanel, "GAME");
             gameEngine.requestFocus();
             gameEngine.startGame();
@@ -100,7 +107,10 @@ public class GameLauncher extends JFrame {
             scoreboardPanel.loadScores();
             cardLayout.show(cardPanel, "SCOREBOARD");
         });
-        mainMenu.setOnShowSettings(() -> cardLayout.show(cardPanel, "SETTINGS"));
+        mainMenu.setOnShowSettings(() -> {
+            //settingsPanel.onShow();
+            cardLayout.show(cardPanel, "SETTINGS");
+        });
         mainMenu.setOnQuit(() -> System.exit(0));
     }
 
@@ -117,7 +127,10 @@ public class GameLauncher extends JFrame {
         });
 
         // Called when player clicks "Main Menu" on the game-over screen
-        gameEngine.setOnMainMenu(this::showMainMenu);
+        gameEngine.setOnMainMenu(() -> {
+            SoundManager.register(uiSound);
+            showMainMenu();
+        });
     }
 
     /**
@@ -134,17 +147,17 @@ public class GameLauncher extends JFrame {
         settingsPanel.setOnBack(this::showMainMenu);
     }
 
-    /**
-     * Don't forget to fill this!!!!!!!!!!!
-     */
     private void setupTutorial() {
         tutorialPanel.setOnComplete(() -> {
-            // After tutorial, go straight to game
             gameEngine.applyTheme(settingsPanel.getSelectedStyle());
-            SoundManager.setVolume(settingsPanel.getSelectedVolume());
+            SoundManager.register(gameEngine.getSoundEngine());
             cardLayout.show(cardPanel, "GAME");
             gameEngine.requestFocus();
             gameEngine.startGame();
+        });
+        tutorialPanel.setOnMainMenu(() -> {
+            SoundManager.register(uiSound);
+            showMainMenu();
         });
     }
     // ── Name-entry dialog ────────────────────────────────────────────────────

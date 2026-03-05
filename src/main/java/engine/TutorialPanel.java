@@ -26,6 +26,7 @@ public class TutorialPanel extends JPanel {
     private Rectangle skipButton;
 
     private Runnable onComplete;
+    private Runnable onMainMenu;
 
     public TutorialPanel() {
         setPreferredSize(new Dimension(WIDTH, HEIGHT));
@@ -40,6 +41,7 @@ public class TutorialPanel extends JPanel {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (nextButton.contains(e.getPoint())) {
+                    SoundManager.click();
                     if (currentPage < TOTAL_PAGES - 1) {
                         currentPage++;
                         repaint();
@@ -48,11 +50,13 @@ public class TutorialPanel extends JPanel {
                         if (onComplete != null) onComplete.run();
                     }
                 } else if (prevButton.contains(e.getPoint()) && currentPage > 0) {
+                    SoundManager.click();
                     currentPage--;
                     repaint();
                 } else if (skipButton.contains(e.getPoint())) {
-                    // Skip tutorial
-                    if (onComplete != null) onComplete.run();
+                    SoundManager.click();
+                    // Skip goes back to main menu, NOT into the game
+                    if (onMainMenu != null) onMainMenu.run();
                 }
             }
         });
@@ -293,8 +297,8 @@ public class TutorialPanel extends JPanel {
         String skipText = "MAINMENU";
         FontMetrics fm = g.getFontMetrics();
         g.drawString(skipText,
-            skipButton.x + (skipButton.width - fm.stringWidth(skipText)) / 2,
-            skipButton.y + (skipButton.height + fm.getAscent()) / 2 - 3);
+                skipButton.x + (skipButton.width - fm.stringWidth(skipText)) / 2,
+                skipButton.y + (skipButton.height + fm.getAscent()) / 2 - 3);
 
         // Previous button
         if (currentPage > 0) {
@@ -306,8 +310,8 @@ public class TutorialPanel extends JPanel {
             String prevText = "← PREVIOUS";
             fm = g.getFontMetrics();
             g.drawString(prevText,
-                prevButton.x + (prevButton.width - fm.stringWidth(prevText)) / 2,
-                prevButton.y + (prevButton.height + fm.getAscent()) / 2 - 5);
+                    prevButton.x + (prevButton.width - fm.stringWidth(prevText)) / 2,
+                    prevButton.y + (prevButton.height + fm.getAscent()) / 2 - 5);
         }
 
         // Next/Start button
@@ -319,8 +323,8 @@ public class TutorialPanel extends JPanel {
         String nextText = currentPage < TOTAL_PAGES - 1 ? "NEXT →" : "START GAME";
         fm = g.getFontMetrics();
         g.drawString(nextText,
-            nextButton.x + (nextButton.width - fm.stringWidth(nextText)) / 2,
-            nextButton.y + (nextButton.height + fm.getAscent()) / 2 - 5);
+                nextButton.x + (nextButton.width - fm.stringWidth(nextText)) / 2,
+                nextButton.y + (nextButton.height + fm.getAscent()) / 2 - 5);
     }
 
     public void reset() {
@@ -329,5 +333,9 @@ public class TutorialPanel extends JPanel {
 
     public void setOnComplete(Runnable callback) {
         this.onComplete = callback;
+    }
+
+    public void setOnMainMenu(Runnable callback) {
+        this.onMainMenu = callback;
     }
 }

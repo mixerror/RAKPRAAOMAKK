@@ -4,7 +4,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.MouseMotionAdapter;
 
 /**
  * CLASS: SettingsPanel
@@ -83,9 +82,7 @@ public class SettingsPanel extends JPanel {
     /** Bounding rectangle of the Back navigation button. */
     private Rectangle backButton;
 
-    /** Volume slider dragging state. */
-    private Rectangle volumeTrack;
-    private boolean   volumeDragging = false;
+
 
     /**
      * Constructs a new {@code SettingsPanel}: sets preferred size, background, and
@@ -98,7 +95,6 @@ public class SettingsPanel extends JPanel {
 
         selectedStyle = BoardStyle.DARK_BLUE;
         backButton = new Rectangle(50, 600, 150, 50);
-        volumeTrack = new Rectangle(250, 540, 300, 12);
 
         addMouseListener(new MouseAdapter() {
             @Override
@@ -120,28 +116,6 @@ public class SettingsPanel extends JPanel {
                         repaint();
                     }
                 }
-            }
-
-            @Override
-            public void mousePressed(MouseEvent e) {
-                // Enlarge hit area for slider
-                Rectangle sliderHit = new Rectangle(volumeTrack.x - 8, volumeTrack.y - 12, volumeTrack.width + 16, volumeTrack.height + 24);
-                if (sliderHit.contains(e.getPoint())) {
-                    volumeDragging = true;
-                    updateVolume(e.getX());
-                }
-            }
-
-            @Override
-            public void mouseReleased(MouseEvent e) {
-                volumeDragging = false;
-            }
-        });
-
-        addMouseMotionListener(new MouseMotionAdapter() {
-            @Override
-            public void mouseDragged(MouseEvent e) {
-                if (volumeDragging) updateVolume(e.getX());
             }
         });
     }
@@ -204,46 +178,6 @@ public class SettingsPanel extends JPanel {
             g2d.drawString(style.name, styleButton.x + 90, styleButton.y + 38);
         }
 
-        // ── Volume Slider ──────────────────────────────────────────────────────
-        g2d.setFont(new Font("Monospaced", Font.PLAIN, 18));
-        g2d.setColor(new Color(129, 140, 248));
-        g2d.drawString("Volume", 250, 525);
-
-        float vol = SoundManager.getVolume();
-        int trackY  = volumeTrack.y;
-        int trackX  = volumeTrack.x;
-        int trackW  = volumeTrack.width;
-        int trackH  = volumeTrack.height;
-
-        // Track background
-        g2d.setColor(new Color(40, 40, 80));
-        g2d.fillRoundRect(trackX, trackY, trackW, trackH, 6, 6);
-
-        // Filled portion
-        int fillW = (int)(trackW * vol);
-        g2d.setColor(new Color(0, 255, 204));
-        if (fillW > 0) g2d.fillRoundRect(trackX, trackY, fillW, trackH, 6, 6);
-
-        // Track border
-        g2d.setColor(new Color(129, 140, 248));
-        g2d.setStroke(new BasicStroke(1));
-        g2d.drawRoundRect(trackX, trackY, trackW, trackH, 6, 6);
-
-        // Thumb
-        int thumbX = trackX + fillW - 8;
-        thumbX = Math.max(trackX, Math.min(trackX + trackW - 16, thumbX));
-        g2d.setColor(new Color(0, 255, 204));
-        g2d.fillRoundRect(thumbX, trackY - 6, 16, trackH + 12, 6, 6);
-        g2d.setColor(new Color(5, 5, 16));
-        g2d.setStroke(new BasicStroke(1.5f));
-        g2d.drawRoundRect(thumbX, trackY - 6, 16, trackH + 12, 6, 6);
-
-        // Volume percentage label
-        g2d.setFont(new Font("Monospaced", Font.BOLD, 15));
-        g2d.setColor(new Color(0, 255, 204));
-        String volPct = (int)(vol * 100) + "%";
-        g2d.drawString(volPct, trackX + trackW + 14, trackY + trackH);
-
         // Back button
         g2d.setColor(new Color(129, 140, 248));
         g2d.setStroke(new BasicStroke(2));
@@ -255,16 +189,6 @@ public class SettingsPanel extends JPanel {
         g2d.drawString(backText,
                 backButton.x + (backButton.width - fm.stringWidth(backText)) / 2,
                 backButton.y + (backButton.height + fm.getAscent()) / 2 - 5);
-    }
-
-    /**
-     * Updates the master volume based on the mouse x position relative to the track.
-     */
-    private void updateVolume(int mouseX) {
-        float ratio = (float)(mouseX - volumeTrack.x) / volumeTrack.width;
-        ratio = Math.max(0f, Math.min(1f, ratio));
-        SoundManager.setVolume(ratio);
-        repaint();
     }
 
     /**
@@ -280,11 +204,4 @@ public class SettingsPanel extends JPanel {
      * @return the selected {@link BoardStyle}; never {@code null}
      */
     public BoardStyle getSelectedStyle() { return selectedStyle; }
-
-    /**
-     * Returns the current volume setting as set by the slider.
-     *
-     * @return volume in [0.0, 1.0]
-     */
-    public float getSelectedVolume() { return SoundManager.getVolume(); }
 }

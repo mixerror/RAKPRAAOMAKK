@@ -268,7 +268,7 @@ public class BeatSoundEngine {
                 ph += 2 * Math.PI * 1100.0 / SAMPLE_RATE;
                 double tone  = Math.sin(ph) * 0.55 + Math.sin(ph * 2.4) * 0.25;
                 double noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 18);
-                double s     = (tone * 0.7 + noise * 0.3) * env * 0.50 * volume;
+                double s     = (tone * 0.7 + noise * 0.3) * env * 1.0 * volume;
                 int pcm = Math.max(-32768, Math.min(32767, (int)(s * 32767)));
                 buf[i * 2]     = (byte)(pcm & 0xFF);
                 buf[i * 2 + 1] = (byte)((pcm >> 8) & 0xFF);
